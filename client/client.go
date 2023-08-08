@@ -1,20 +1,29 @@
-package main
+package client
 
 import (
 	"bufio"
 	"fmt"
 	"net"
 	"os"
+    "os/signal"
 )
 
-func main() {
+func Client() {
 	conn, err := net.Dial("tcp", "localhost:8000")
 	if err != nil {
 		fmt.Println("Error connecting:", err)
 		return
 	}
-	defer conn.Close()
 
+    c := make(chan os.Signal, 1)
+    signal.Notify(c, os.Interrupt)
+    go func() {
+        for range c {
+            fmt.Println()
+            conn.Close()
+            os.Exit(1)
+        }
+    }()
 	writer := bufio.NewWriter(conn)
     reader := bufio.NewReader(os.Stdin)
 

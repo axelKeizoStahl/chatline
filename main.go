@@ -1,9 +1,19 @@
 package main
 
 import (
-    "fmt"
+    "flag"
+    "chatline/client"
+    "chatline/server"
 )
 
 func main() {
-    fmt.Println("Server")
+    conntype := flag.String("type", "client", "server or client type")
+    flag.Parse()
+
+    switch *conntype {
+        case "server":
+            server.Server()
+        case "client":
+            client.Client()
+    }
 }

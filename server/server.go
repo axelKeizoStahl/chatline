@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bufio"
@@ -6,7 +6,7 @@ import (
 	"net"
 )
 
-func main() {
+func Server() {
     fmt.Println("Starting server...")
     ln, _ := net.Listen("tcp", ":8000")
     conn, _ := ln.Accept()
