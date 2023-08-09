@@ -27,6 +27,23 @@ func Client() {
 	writer := bufio.NewWriter(conn)
     reader := bufio.NewReader(os.Stdin)
 
+    fmt.Print("Enter room name: ")
+    room, err := reader.ReadString('\n')
+    if err != nil {
+        fmt.Println(err)
+    }
+    
+    _, err = writer.WriteString("room_assign: " + room)
+    if err != nil {
+        fmt.Println("Error writing to buffered writer:", err)
+        return
+    }
+
+    err = writer.Flush()
+    if err != nil {
+        fmt.Println("Error flushing buffered writer:", err)
+        return
+    }
 	for {
 		fmt.Print("Enter a message: ")
 		message, err := reader.ReadString('\n')
