@@ -1,6 +1,7 @@
 package server
 
 import (
+    "strconv"
 	"bufio"
 	"fmt"
 	"io"
@@ -13,6 +14,15 @@ import (
 
 type Room struct {
     Connections []net.Conn
+}
+
+func (r *Room) Broadcast(message string) {
+    for _, conn := range r.Connections {
+        _, err := conn.Write([]byte(message))
+        if err != nil {
+            fmt.Println("Error broadcasting message:", err)
+        }
+    }
 }
 
 func Server() {
@@ -65,15 +75,20 @@ func Server() {
                     go func() {
                         room_mutex.Lock()
                         defer room_mutex.Unlock()
-                        if _, exists := user_rooms[message[14:]]; !exists {
-                            user_rooms[message[14:]] = &Room{}
+                        if _, exists := user_rooms[message[13:len(message)-1]]; !exists {
+                            user_rooms[message[13:len(message)-1]] = &Room{}
                         }
-                        room := user_rooms[message[14:]]
-                        room.Connections = append(user_rooms[message[14:]].Connections, c)
+                        room := user_rooms[message[13:len(message)-1]]
+                        room.Connections = append(user_rooms[message[13:len(message)-1]].Connections, c)
                     }()
                     continue
                 }
-                fmt.Println("Message Received: ", string(message))
+                num, _ := strconv.Atoi(string(message)[:1])
+                fmt.Print("Message Received: ", string(message)[num+1:])
+                room := user_rooms[string(message)[:num+1][1:]]
+                room_mutex.Lock()
+                room.Broadcast(string(message[num+1:]))
+                room_mutex.Unlock()
             }
         }(conn)
     }

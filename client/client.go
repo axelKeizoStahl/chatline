@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"net"
 	"os"
-    "os/signal"
+	"os/signal"
+	"strconv"
 )
 
 func Client() {
@@ -26,6 +27,7 @@ func Client() {
     }()
 	writer := bufio.NewWriter(conn)
     reader := bufio.NewReader(os.Stdin)
+    netreader := bufio.NewReader(conn)
 
     fmt.Print("Enter room name: ")
     room, err := reader.ReadString('\n')
@@ -44,6 +46,17 @@ func Client() {
         fmt.Println("Error flushing buffered writer:", err)
         return
     }
+     go func() {
+        for {
+            message, err := netreader.ReadString('\n')
+            if err != nil {
+                fmt.Println("Error reading message:", err)
+                return
+            }
+            fmt.Print("\nReceived: " + message)
+            fmt.Print("Enter a message: ")
+        }
+    }()
 	for {
 		fmt.Print("Enter a message: ")
 		message, err := reader.ReadString('\n')
@@ -52,7 +65,9 @@ func Client() {
 			return
 		}
 
-		_, err = writer.WriteString(message)
+        full_message := strconv.Itoa(len(room)-1) + room[:len(room)-1] + message
+
+		_, err = writer.WriteString(full_message)
 		if err != nil {
 			fmt.Println("Error writing to buffered writer:", err)
 			return
