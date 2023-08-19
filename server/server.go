@@ -70,6 +70,21 @@ func Server() {
                     return
                 }
 
+                is_exit, _ := regexp.Compile("83479256exit")
+                if is_exit.MatchString(message) {
+                    room_mutex.Lock()
+                    room := user_rooms[string(message)[12:len(string(message))]]
+                    for index, element := range room.Connections {
+                        if element == c {
+                            room.Connections[index] = room.Connections[len(room.Connections)-1]
+                            room.Connections = room.Connections[:len(room.Connections)-1]
+                            room.Connections = append(room.Connections[:index], room.Connections[index+1:]...)
+                        }
+                    }
+                    c.Close()
+                }
+
+
                 room_assignment, _ := regexp.Compile("room_assign: .*")
                 if room_assignment.MatchString(message) {
                     go func() {

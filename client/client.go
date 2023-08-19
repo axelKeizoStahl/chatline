@@ -9,6 +9,13 @@ import (
 	"strconv"
 )
 
+func help() {
+    fmt.Println("use ** as a prefix to enter a command")
+    fmt.Println("**logo : log out")
+    fmt.Println("**exit : exit chatline")
+    fmt.Println("**switchu : switch user")
+}
+
 func Client() {
 	conn, err := net.Dial("tcp", "localhost:8000")
 	if err != nil {
@@ -16,18 +23,12 @@ func Client() {
 		return
 	}
 
-    c := make(chan os.Signal, 1)
-    signal.Notify(c, os.Interrupt)
-    go func() {
-        for range c {
-            fmt.Println()
-            conn.Close()
-            os.Exit(1)
-        }
-    }()
+    fmt.Println("WELCOME to CHATLINE")
+    fmt.Println("type **h to ask for help")
 	writer := bufio.NewWriter(conn)
     reader := bufio.NewReader(os.Stdin)
     netreader := bufio.NewReader(conn)
+
 
     fmt.Print("Enter room name: ")
     room, err := reader.ReadString('\n')
@@ -46,6 +47,32 @@ func Client() {
         fmt.Println("Error flushing buffered writer:", err)
         return
     }
+
+    exit := func() {
+        _, err = writer.WriteString("83479256exit" + room)
+        if err != nil {
+            fmt.Println("Error writing to buffered writer:", err)
+            return
+        }
+        fmt.Println()
+        conn.Close()
+        os.Exit(1)
+    }
+
+            err = writer.Flush()
+            if err != nil {
+                fmt.Println("Error flushing bufio network buffer:", err)
+                return
+            }
+
+    c := make(chan os.Signal, 1)
+    signal.Notify(c, os.Interrupt)
+    go func() {
+        for range c {
+            exit()
+        }
+    }()
+
      go func() {
         for {
             message, err := netreader.ReadString('\n')
@@ -66,6 +93,12 @@ func Client() {
 		}
 
         full_message := strconv.Itoa(len(room)-1) + room[:len(room)-1] + message
+        if message[:len(message)-1] == "**h" {
+            help()
+        }
+        if message[:len(message)-1] == "**exit" {
+            exit()
+        }
 
 		_, err = writer.WriteString(full_message)
 		if err != nil {
