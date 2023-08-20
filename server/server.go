@@ -1,7 +1,6 @@
 package server
 
 import (
-    "strconv"
 	"bufio"
 	"fmt"
 	"io"
@@ -78,7 +77,7 @@ func Server() {
                 is_exit, _ := regexp.Compile("83479256exit")
                 if is_exit.MatchString(message) {
                     room_mutex.Lock()
-                    room := user_rooms[string(message)[12:len(string(message))]]
+                    room := user_rooms[message[12:len(message)-1]]
                     for index, element := range room.Connections {
                         if element.Connection == c {
                             room.Connections[index] = room.Connections[len(room.Connections)-1]
@@ -107,11 +106,13 @@ func Server() {
                     }()
                     continue
                 }
-                num, _ := strconv.Atoi(string(message)[:1])
-                fmt.Print("Message Received: ", string(message)[num+1:])
-                room := user_rooms[string(message)[:num+1][1:]]
+                breaker, _ := regexp.Compile("83479256")
+                breakpoints := breaker.FindAllStringSubmatchIndex(message, -1)
+                user_name := message[:breakpoints[0][0]]
+                room := user_rooms[message[breakpoints[0][1]:breakpoints[1][0]]]
+                message = "[" + user_name + "] " + message[breakpoints[1][1]:]
                 room_mutex.Lock()
-                room.Broadcast(string(message[num+1:]))
+                room.Broadcast(message)
                 room_mutex.Unlock()
             }
         }(conn)

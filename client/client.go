@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strconv"
 )
 
 func help() {
@@ -95,7 +94,7 @@ func Client() {
 			return
 		}
 
-        full_message := strconv.Itoa(len(room)-1) + room[:len(room)-1] + message
+        full_message := username + "83479256" + room[:len(room)-1] + "83479256" + message
         if message[:len(message)-1] == "**h" {
             help()
         }
