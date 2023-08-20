@@ -29,6 +29,9 @@ func Client() {
     reader := bufio.NewReader(os.Stdin)
     netreader := bufio.NewReader(conn)
 
+    var username string
+    fmt.Print("Enter username: ")
+    fmt.Scanf("%s", &username)
 
     fmt.Print("Enter room name: ")
     room, err := reader.ReadString('\n')
@@ -36,7 +39,7 @@ func Client() {
         fmt.Println(err)
     }
     
-    _, err = writer.WriteString("room_assign: " + room)
+    _, err = writer.WriteString(username + "room_assign: " + room)
     if err != nil {
         fmt.Println("Error writing to buffered writer:", err)
         return

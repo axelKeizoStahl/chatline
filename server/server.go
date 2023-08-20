@@ -12,13 +12,18 @@ import (
 	"sync"
 )
 
+type User struct {
+    Connection net.Conn
+    Name string
+}
+
 type Room struct {
-    Connections []net.Conn
+    Connections []User
 }
 
 func (r *Room) Broadcast(message string) {
     for _, conn := range r.Connections {
-        _, err := conn.Write([]byte(message))
+        _, err := conn.Connection.Write([]byte(message))
         if err != nil {
             fmt.Println("Error broadcasting message:", err)
         }
@@ -75,7 +80,7 @@ func Server() {
                     room_mutex.Lock()
                     room := user_rooms[string(message)[12:len(string(message))]]
                     for index, element := range room.Connections {
-                        if element == c {
+                        if element.Connection == c {
                             room.Connections[index] = room.Connections[len(room.Connections)-1]
                             room.Connections = room.Connections[:len(room.Connections)-1]
                             room.Connections = append(room.Connections[:index], room.Connections[index+1:]...)
@@ -85,16 +90,20 @@ func Server() {
                 }
 
 
-                room_assignment, _ := regexp.Compile("room_assign: .*")
+                room_assignment, _ := regexp.Compile("room_assign: ")
                 if room_assignment.MatchString(message) {
                     go func() {
                         room_mutex.Lock()
                         defer room_mutex.Unlock()
-                        if _, exists := user_rooms[message[13:len(message)-1]]; !exists {
-                            user_rooms[message[13:len(message)-1]] = &Room{}
+                        room_index := room_assignment.FindStringIndex(message)
+                        room_name := message[room_index[1]:len(message)-1]
+                        user_name := message[:room_index[0]]
+                        if _, exists := user_rooms[room_name]; !exists {
+                            user_rooms[room_name] = &Room{}
                         }
-                        room := user_rooms[message[13:len(message)-1]]
-                        room.Connections = append(user_rooms[message[13:len(message)-1]].Connections, c)
+                        room := user_rooms[room_name]
+                        user := User{Name: user_name, Connection: c}
+                        room.Connections = append(room.Connections, user)
                     }()
                     continue
                 }
