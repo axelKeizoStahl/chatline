@@ -1,6 +1,7 @@
 package client
 
 import (
+    "io"
 	"bufio"
 	"fmt"
 	"net"
@@ -61,12 +62,6 @@ func Client() {
         os.Exit(1)
     }
 
-            err = writer.Flush()
-            if err != nil {
-                fmt.Println("Error flushing bufio network buffer:", err)
-                return
-            }
-
     c := make(chan os.Signal, 1)
     signal.Notify(c, os.Interrupt)
     go func() {
@@ -79,6 +74,9 @@ func Client() {
         for {
             message, err := netreader.ReadString('\n')
             if err != nil {
+                if err == io.EOF {
+                    exit()
+                }
                 fmt.Println("Error reading message:", err)
                 return
             }
