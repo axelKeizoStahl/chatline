@@ -11,23 +11,73 @@ import (
 	"sync"
 )
 
+type Profile struct {
+    Name string
+    Location string
+    Description string
+    Age int
+}
+
 type User struct {
+    Serverlife bool
     Connection net.Conn
     Name string
+    Profile Profile
 }
 
 type Room struct {
-    Connections []User
+    public bool
+    Users []User
+    host User
 }
 
 func (r *Room) Broadcast(message string) {
-    for _, conn := range r.Connections {
+    for _, conn := range r.Users {
         _, err := conn.Connection.Write([]byte(message))
         if err != nil {
             fmt.Println("Error broadcasting message:", err)
         }
     }
 }
+
+func (r *Room) ListUsers() {
+    for _, conn := range r.Users {
+        _, err := conn.Connection.Write([]byte(conn.Name + "\n"))
+        if err != nil {
+            fmt.Println("Error listing users:", err)
+        }
+    }
+}
+
+func ListRooms(rooms map[string]*Room) {
+    for room_name := range rooms {
+        fmt.Println(room_name)
+    }
+}
+
+type Listener struct {
+    Protocol string
+    Port string
+    user_rooms map[string]*Room
+}
+
+func (l *Listener) Exit() {
+    fmt.Println("Closing all connections")
+    for _, room := range l.user_rooms {
+        go func() {
+            go func() { room.Broadcast("Server is shutting down...\n") }()
+            for _, user := range room.Users {
+                go func() {
+                    user.Connection.Close()
+                    fmt.Println("Closed connection to", user.Name)
+                }()
+            }
+        }()
+    }
+    fmt.Println("Exiting...")
+    os.Exit(1)
+}
+
 
 func Server() {
     fmt.Println("Starting server...")
@@ -36,7 +86,6 @@ func Server() {
         fmt.Println(err)
     }
     defer func() { _ = listener.Close() }()
-    user_rooms := make(map[string]*Room)
     var room_mutex sync.Mutex
 
     exit := make(chan os.Signal, 1)
@@ -78,11 +127,11 @@ func Server() {
                 if is_exit.MatchString(message) {
                     room_mutex.Lock()
                     room := user_rooms[message[12:len(message)-1]]
-                    for index, element := range room.Connections {
+                    for index, element := range room.Users {
                         if element.Connection == c {
-                            room.Connections[index] = room.Connections[len(room.Connections)-1]
-                            room.Connections = room.Connections[:len(room.Connections)-1]
-                            room.Connections = append(room.Connections[:index], room.Connections[index+1:]...)
+                            room.Users[index] = room.Users[len(room.Users)-1]
+                            room.Users = room.Users[:len(room.Users)-1]
+                            room.Users = append(room.Users[:index], room.Users[index+1:]...)
                         }
                     }
                     c.Close()
@@ -102,7 +151,7 @@ func Server() {
                         }
                         room := user_rooms[room_name]
                         user := User{Name: user_name, Connection: c}
-                        room.Connections = append(room.Connections, user)
+                        room.Users = append(room.Users, user)
                     }()
                     continue
                 }
