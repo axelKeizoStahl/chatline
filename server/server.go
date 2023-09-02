@@ -23,6 +23,65 @@ type User struct {
     Connection net.Conn
     Name string
     Profile Profile
+    Room string
+}
+
+func (user *User) HandleMessage(c net.Conn, listener *Listener) {
+
+    defer c.Close()
+    for {
+        message, err := bufio.NewReader(c).ReadString('\n')
+        if err != nil {
+            if err != io.EOF {
+                fmt.Println(err)
+            }
+            return
+        }
+
+        is_exit, _ := regexp.Compile("83479256exit")
+        if is_exit.MatchString(message) {
+            room := listener.User_rooms[message[12:len(message)-1]]
+            room.Room_mutex.Lock()
+            for index, element := range room.Users {
+                if element.Connection == c {
+                    room.Users[index] = room.Users[len(room.Users)-1]
+                    room.Users = room.Users[:len(room.Users)-1]
+                    room.Users = append(room.Users[:index], room.Users[index+1:]...)
+                }
+            }
+            c.Close()
+        }
+
+
+        breaker, _ := regexp.Compile("83479256")
+        breakpoints := breaker.FindAllStringSubmatchIndex(message, -1)
+        user_name := message[:breakpoints[0][0]]
+        room := listener.User_rooms[message[breakpoints[0][1]:breakpoints[1][0]]]
+        fmt.Println(room, message[breakpoints[0][1]:breakpoints[1][0]])
+        message = "[" + user_name + "] " + message[breakpoints[1][1]:]
+        room.Room_mutex.Lock()
+        defer room.Room_mutex.Unlock()
+        room.Broadcast(message)
+
+        room_assignment, _ := regexp.Compile("room_assign: ")
+        if room_assignment.MatchString(message) {
+            go func() {
+                room_index := room_assignment.FindStringIndex(message)
+                room_name := message[room_index[1]:len(message)-1]
+                fmt.Println(room_name)
+                user_name := message[:room_index[0]]
+                if _, exists := listener.User_rooms[room_name]; !exists {
+                    listener.User_rooms[room_name] = &Room{}
+                }
+                room := listener.User_rooms[room_name]
+                room.Room_mutex.Lock()
+                defer room.Room_mutex.Unlock()
+                user := User{Name: user_name, Connection: c}
+                room.Users = append(room.Users, user)
+            }()
+            continue
+        }
+    }
 }
 
 type Room struct {
@@ -62,6 +121,7 @@ type Listener struct {
     User_rooms map[string]*Room
     Ln net.Listener
     Err error
+    Exit_chan chan os.Signal
 }
 
 func (l *Listener) Listen() {
@@ -71,18 +131,44 @@ func (l *Listener) Listen() {
     }
 }
 
-func (l *Listener) Exit() {
-    fmt.Println("Closing all connections")
-    for _, room := range l.User_rooms {
-        go func(room *Room) {
-            go func(room *Room) { room.Broadcast("Server is shutting down...\n") }(room)
-            for _, user := range room.Users {
-                go func(user User) {
-                    user.Connection.Close()
-                    fmt.Println("Closed connection to", user.Name)
-                }(user)
+func (l *Listener) Handle() {
+    for {
+        conn, err := l.Ln.Accept()
+        if err != nil {
+            fmt.Println(err)
+        }
+        go
+        go func(c net.Conn) {
+            defer c.Close()
+            for {
+                message, err := bufio.NewReader(c).ReadString('\n')
+                if err != nil {
+                    if err != io.EOF {
+                        fmt.Println(err)
+                    }
+                    return
+                }
+                fmt.Println(message)
             }
-        }(room)
+        }(conn)
+    }
+}
+
+func (l *Listener) Exit() {
+    signal.Notify(l.Exit_chan, os.Interrupt)
+    for range l.Exit_chan {
+        fmt.Println("Closing all connections")
+        for _, room := range l.User_rooms {
+            go func(room *Room) {
+                go func(room *Room) { room.Broadcast("Server is shutting down...\n") }(room)
+                for _, user := range room.Users {
+                    go func(user User) {
+                        user.Connection.Close()
+                        fmt.Println("Closed connection to", user.Name)
+                    }(user)
+                }
+            }(room)
+        }
     }
     fmt.Println("Closing server listener...")
     l.Ln.Close()
@@ -92,32 +178,16 @@ func (l *Listener) Exit() {
 
 func Server() {
     fmt.Println("Starting server...")
-    listener := Listener{Protocol: "tcp", Port: ":8000", User_rooms: make(map[string]*Room)}
+    listener := Listener{Protocol: "tcp", Port: ":8000", User_rooms: make(map[string]*Room), Exit_chan: make(chan os.Signal, 1)}
     listener.Listen()
 
-    exit := make(chan os.Signal, 1)
-    signal.Notify(exit, os.Interrupt)
-    go func() {
-        for range exit {
-            listener.Exit()
-        }
-    }()
-
+    go listener.Exit()
     for {
         conn, err := listener.Ln.Accept()
         if err!=nil {
             fmt.Println(err)
         }
         go func(c net.Conn) {
-            exit := make(chan os.Signal, 1)
-            signal.Notify(exit, os.Interrupt)
-            go func() {
-                for range exit {
-                    fmt.Println()
-                    c.Close()
-                    os.Exit(1)
-                }
-            }()
             defer c.Close()
             for {
                 message, err := bufio.NewReader(c).ReadString('\n')
@@ -143,24 +213,6 @@ func Server() {
                 }
 
 
-                room_assignment, _ := regexp.Compile("room_assign: ")
-                if room_assignment.MatchString(message) {
-                    go func() {
-                        room_index := room_assignment.FindStringIndex(message)
-                        room_name := message[room_index[1]:len(message)-1]
-                        fmt.Println(room_name)
-                        user_name := message[:room_index[0]]
-                        if _, exists := listener.User_rooms[room_name]; !exists {
-                            listener.User_rooms[room_name] = &Room{}
-                        }
-                        room := listener.User_rooms[room_name]
-                        room.Room_mutex.Lock()
-                        defer room.Room_mutex.Unlock()
-                        user := User{Name: user_name, Connection: c}
-                        room.Users = append(room.Users, user)
-                    }()
-                    continue
-                }
                 breaker, _ := regexp.Compile("83479256")
                 breakpoints := breaker.FindAllStringSubmatchIndex(message, -1)
                 user_name := message[:breakpoints[0][0]]
